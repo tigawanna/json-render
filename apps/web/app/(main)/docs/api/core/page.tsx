@@ -273,8 +273,8 @@ compiler.reset();`}</Code>
       </p>
       <Code lang="typescript">{`import { compileSpecStream } from '@json-render/core';
 
-const jsonl = \`{"op":"set","path":"/root","value":{}}
-{"op":"set","path":"/root/type","value":"Card"}\`;
+const jsonl = \`{"op":"add","path":"/root","value":{}}
+{"op":"add","path":"/root/type","value":"Card"}\`;
 
 const spec = compileSpecStream<MySpec>(jsonl);`}</Code>
 
@@ -285,22 +285,36 @@ const spec = compileSpecStream<MySpec>(jsonl);`}</Code>
 } from '@json-render/core';
 
 // Parse a single line
-const patch = parseSpecStreamLine('{"op":"set","path":"/root","value":{}}');
+const patch = parseSpecStreamLine('{"op":"add","path":"/root","value":{}}');
 
 // Apply patch to object (mutates in place)
 const obj = {};
 applySpecStreamPatch(obj, patch);`}</Code>
 
       <h3 className="text-lg font-semibold mt-8 mb-4">SpecStream Types</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Fully compliant with{" "}
+        <a
+          href="https://datatracker.ietf.org/doc/html/rfc6902"
+          className="underline"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          RFC 6902
+        </a>
+        :
+      </p>
       <Code lang="typescript">{`interface SpecStreamLine {
-  op: 'set' | 'add' | 'replace' | 'remove';
+  op: 'add' | 'remove' | 'replace' | 'move' | 'copy' | 'test';
   path: string;
-  value?: unknown;
+  value?: unknown;  // Required for add, replace, test
+  from?: string;    // Required for move, copy
 }
 
 interface SpecStreamCompiler<T> {
   push(chunk: string): { result: T; newPatches: SpecStreamLine[] };
   getResult(): T;
+  getPatches(): SpecStreamLine[];
   reset(): void;
 }`}</Code>
 

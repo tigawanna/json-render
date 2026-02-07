@@ -18,10 +18,10 @@ export default function StreamingPage() {
         format where each line is a JSON patch operation that progressively
         builds your spec:
       </p>
-      <Code lang="json">{`{"op":"set","path":"/root","value":"root"}
-{"op":"set","path":"/elements/root","value":{"type":"Card","props":{"title":"Dashboard"},"children":["metric-1","metric-2"]}}
-{"op":"set","path":"/elements/metric-1","value":{"type":"Metric","props":{"label":"Revenue"}}}
-{"op":"set","path":"/elements/metric-2","value":{"type":"Metric","props":{"label":"Users"}}}`}</Code>
+      <Code lang="json">{`{"op":"add","path":"/root","value":"root"}
+{"op":"add","path":"/elements/root","value":{"type":"Card","props":{"title":"Dashboard"},"children":["metric-1","metric-2"]}}
+{"op":"add","path":"/elements/metric-1","value":{"type":"Metric","props":{"label":"Revenue"}}}
+{"op":"add","path":"/elements/metric-2","value":{"type":"Metric","props":{"label":"Users"}}}`}</Code>
 
       <h2 className="text-xl font-semibold mt-12 mb-4">useUIStream Hook</h2>
       <p className="text-sm text-muted-foreground mb-4">
@@ -43,26 +43,47 @@ function App() {
   });
 }`}</Code>
 
-      <h2 className="text-xl font-semibold mt-12 mb-4">Patch Operations</h2>
+      <h2 className="text-xl font-semibold mt-12 mb-4">
+        Patch Operations (RFC 6902)
+      </h2>
       <p className="text-sm text-muted-foreground mb-4">
-        Supported operations:
+        SpecStream uses{" "}
+        <a
+          href="https://datatracker.ietf.org/doc/html/rfc6902"
+          className="underline"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          RFC 6902 JSON Patch
+        </a>{" "}
+        operations:
       </p>
       <ul className="list-disc list-inside text-sm text-muted-foreground space-y-2 mb-4">
         <li>
-          <code className="text-foreground">set</code> — Set the value at a path
-          (creates if needed)
+          <code className="text-foreground">add</code> — Add a value at a path
+          (creates or replaces for objects, inserts for arrays)
         </li>
         <li>
-          <code className="text-foreground">add</code> — Add to an array at a
-          path
+          <code className="text-foreground">remove</code> — Remove the value at
+          a path
         </li>
         <li>
-          <code className="text-foreground">replace</code> — Replace value at a
-          path
+          <code className="text-foreground">replace</code> — Replace an existing
+          value at a path
         </li>
         <li>
-          <code className="text-foreground">remove</code> — Remove value at a
-          path
+          <code className="text-foreground">move</code> — Move a value from one
+          path to another (requires{" "}
+          <code className="text-foreground">from</code>)
+        </li>
+        <li>
+          <code className="text-foreground">copy</code> — Copy a value from one
+          path to another (requires{" "}
+          <code className="text-foreground">from</code>)
+        </li>
+        <li>
+          <code className="text-foreground">test</code> — Assert that a value at
+          a path equals the given value
         </li>
       </ul>
 
@@ -170,8 +191,8 @@ async function processStream(reader: ReadableStreamDefaultReader) {
       </p>
       <Code lang="typescript">{`import { compileSpecStream } from '@json-render/core';
 
-const jsonl = \`{"op":"set","path":"/root","value":{"type":"Card"}}
-{"op":"set","path":"/root/props","value":{"title":"Hello"}}\`;
+const jsonl = \`{"op":"add","path":"/root","value":{"type":"Card"}}
+{"op":"add","path":"/root/props","value":{"title":"Hello"}}\`;
 
 const spec = compileSpecStream<MySpec>(jsonl);
 // { root: { type: "Card", props: { title: "Hello" } } }`}</Code>

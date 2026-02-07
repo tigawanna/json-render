@@ -7,7 +7,12 @@ import type {
   FlatElement,
   JsonPatch,
 } from "@json-render/core";
-import { setByPath } from "@json-render/core";
+import {
+  setByPath,
+  getByPath,
+  addByPath,
+  removeByPath,
+} from "@json-render/core";
 
 /**
  * Parse a single JSON patch line
@@ -25,56 +30,104 @@ function parsePatchLine(line: string): JsonPatch | null {
 }
 
 /**
- * Apply a JSON patch to the current spec
+ * Set a value at a spec path (for add/replace operations).
+ */
+function setSpecValue(newSpec: Spec, path: string, value: unknown): void {
+  if (path === "/root") {
+    newSpec.root = value as string;
+    return;
+  }
+
+  if (path.startsWith("/elements/")) {
+    const pathParts = path.slice("/elements/".length).split("/");
+    const elementKey = pathParts[0];
+    if (!elementKey) return;
+
+    if (pathParts.length === 1) {
+      newSpec.elements[elementKey] = value as UIElement;
+    } else {
+      const element = newSpec.elements[elementKey];
+      if (element) {
+        const propPath = "/" + pathParts.slice(1).join("/");
+        const newElement = { ...element };
+        setByPath(
+          newElement as unknown as Record<string, unknown>,
+          propPath,
+          value,
+        );
+        newSpec.elements[elementKey] = newElement;
+      }
+    }
+  }
+}
+
+/**
+ * Remove a value at a spec path.
+ */
+function removeSpecValue(newSpec: Spec, path: string): void {
+  if (path.startsWith("/elements/")) {
+    const pathParts = path.slice("/elements/".length).split("/");
+    const elementKey = pathParts[0];
+    if (!elementKey) return;
+
+    if (pathParts.length === 1) {
+      const { [elementKey]: _, ...rest } = newSpec.elements;
+      newSpec.elements = rest;
+    } else {
+      const element = newSpec.elements[elementKey];
+      if (element) {
+        const propPath = "/" + pathParts.slice(1).join("/");
+        const newElement = { ...element };
+        removeByPath(
+          newElement as unknown as Record<string, unknown>,
+          propPath,
+        );
+        newSpec.elements[elementKey] = newElement;
+      }
+    }
+  }
+}
+
+/**
+ * Get a value at a spec path.
+ */
+function getSpecValue(spec: Spec, path: string): unknown {
+  if (path === "/root") return spec.root;
+  return getByPath(spec as unknown as Record<string, unknown>, path);
+}
+
+/**
+ * Apply an RFC 6902 JSON patch to the current spec.
+ * Supports add, remove, replace, move, copy, and test operations.
  */
 function applyPatch(spec: Spec, patch: JsonPatch): Spec {
   const newSpec = { ...spec, elements: { ...spec.elements } };
 
   switch (patch.op) {
-    case "set":
     case "add":
     case "replace": {
-      // Handle root path
-      if (patch.path === "/root") {
-        newSpec.root = patch.value as string;
-        return newSpec;
-      }
-
-      // Handle elements paths
-      if (patch.path.startsWith("/elements/")) {
-        const pathParts = patch.path.slice("/elements/".length).split("/");
-        const elementKey = pathParts[0];
-
-        if (!elementKey) return newSpec;
-
-        if (pathParts.length === 1) {
-          // Setting entire element
-          newSpec.elements[elementKey] = patch.value as UIElement;
-        } else {
-          // Setting property of element
-          const element = newSpec.elements[elementKey];
-          if (element) {
-            const propPath = "/" + pathParts.slice(1).join("/");
-            const newElement = { ...element };
-            setByPath(
-              newElement as unknown as Record<string, unknown>,
-              propPath,
-              patch.value,
-            );
-            newSpec.elements[elementKey] = newElement;
-          }
-        }
-      }
+      setSpecValue(newSpec, patch.path, patch.value);
       break;
     }
     case "remove": {
-      if (patch.path.startsWith("/elements/")) {
-        const elementKey = patch.path.slice("/elements/".length).split("/")[0];
-        if (elementKey) {
-          const { [elementKey]: _, ...rest } = newSpec.elements;
-          newSpec.elements = rest;
-        }
-      }
+      removeSpecValue(newSpec, patch.path);
+      break;
+    }
+    case "move": {
+      if (!patch.from) break;
+      const moveValue = getSpecValue(newSpec, patch.from);
+      removeSpecValue(newSpec, patch.from);
+      setSpecValue(newSpec, patch.path, moveValue);
+      break;
+    }
+    case "copy": {
+      if (!patch.from) break;
+      const copyValue = getSpecValue(newSpec, patch.from);
+      setSpecValue(newSpec, patch.path, copyValue);
+      break;
+    }
+    case "test": {
+      // test is a no-op for rendering purposes (validation only)
       break;
     }
   }

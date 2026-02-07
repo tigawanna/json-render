@@ -62,8 +62,9 @@ USER REQUEST: ${sanitizedPrompt}
 
 IMPORTANT: The current UI is already loaded. Output ONLY the patches needed to make the requested change:
 - To add a new element: {"op":"add","path":"/elements/new-key","value":{...}}
-- To modify an existing element: {"op":"set","path":"/elements/existing-key","value":{...}}
-- To update the root: {"op":"set","path":"/root","value":"new-root-key"}
+- To modify an existing element: {"op":"replace","path":"/elements/existing-key","value":{...}}
+- To remove an element: {"op":"remove","path":"/elements/old-key"}
+- To update the root: {"op":"replace","path":"/root","value":"new-root-key"}
 - To add children: update the parent element with new children array
 
 DO NOT output patches for elements that don't need to change. Only output what's necessary for the requested modification.`;

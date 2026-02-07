@@ -136,17 +136,20 @@ export type ComponentSchema = z.ZodType<Record<string, unknown>>;
 export type ValidationMode = "strict" | "warn" | "ignore";
 
 /**
- * JSON patch operation types
+ * JSON patch operation types (RFC 6902)
  */
-export type PatchOp = "add" | "remove" | "replace" | "set";
+export type PatchOp = "add" | "remove" | "replace" | "move" | "copy" | "test";
 
 /**
- * JSON patch operation
+ * JSON patch operation (RFC 6902)
  */
 export interface JsonPatch {
   op: PatchOp;
   path: string;
+  /** Required for add, replace, test */
   value?: unknown;
+  /** Required for move, copy (source location) */
+  from?: string;
 }
 
 /**
@@ -168,16 +171,30 @@ export function resolveDynamicValue<T>(
 }
 
 /**
- * Get a value from an object by JSON Pointer path
+ * Unescape a JSON Pointer token per RFC 6901 Section 4.
+ * ~1 is decoded to / and ~0 is decoded to ~ (order matters).
+ */
+function unescapeJsonPointer(token: string): string {
+  return token.replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
+/**
+ * Parse a JSON Pointer path into unescaped segments.
+ */
+function parseJsonPointer(path: string): string[] {
+  const raw = path.startsWith("/") ? path.slice(1).split("/") : path.split("/");
+  return raw.map(unescapeJsonPointer);
+}
+
+/**
+ * Get a value from an object by JSON Pointer path (RFC 6901)
  */
 export function getByPath(obj: unknown, path: string): unknown {
   if (!path || path === "/") {
     return obj;
   }
 
-  const segments = path.startsWith("/")
-    ? path.slice(1).split("/")
-    : path.split("/");
+  const segments = parseJsonPointer(path);
 
   let current: unknown = obj;
 
@@ -186,7 +203,10 @@ export function getByPath(obj: unknown, path: string): unknown {
       return undefined;
     }
 
-    if (typeof current === "object") {
+    if (Array.isArray(current)) {
+      const index = parseInt(segment, 10);
+      current = current[index];
+    } else if (typeof current === "object") {
       current = (current as Record<string, unknown>)[segment];
     } else {
       return undefined;
@@ -204,7 +224,7 @@ function isNumericIndex(str: string): boolean {
 }
 
 /**
- * Set a value in an object by JSON Pointer path.
+ * Set a value in an object by JSON Pointer path (RFC 6901).
  * Automatically creates arrays when the path segment is a numeric index.
  */
 export function setByPath(
@@ -212,9 +232,7 @@ export function setByPath(
   path: string,
   value: unknown,
 ): void {
-  const segments = path.startsWith("/")
-    ? path.slice(1).split("/")
-    : path.split("/");
+  const segments = parseJsonPointer(path);
 
   if (segments.length === 0) return;
 
@@ -224,7 +242,8 @@ export function setByPath(
     const segment = segments[i]!;
     const nextSegment = segments[i + 1];
     const nextIsNumeric =
-      nextSegment !== undefined && isNumericIndex(nextSegment);
+      nextSegment !== undefined &&
+      (isNumericIndex(nextSegment) || nextSegment === "-");
 
     if (Array.isArray(current)) {
       const index = parseInt(segment, 10);
@@ -242,11 +261,129 @@ export function setByPath(
 
   const lastSegment = segments[segments.length - 1]!;
   if (Array.isArray(current)) {
-    const index = parseInt(lastSegment, 10);
-    current[index] = value;
+    if (lastSegment === "-") {
+      current.push(value);
+    } else {
+      const index = parseInt(lastSegment, 10);
+      current[index] = value;
+    }
   } else {
     current[lastSegment] = value;
   }
+}
+
+/**
+ * Add a value per RFC 6902 "add" semantics.
+ * For objects: create-or-replace the member.
+ * For arrays: insert before the given index, or append if "-".
+ */
+export function addByPath(
+  obj: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): void {
+  const segments = parseJsonPointer(path);
+
+  if (segments.length === 0) return;
+
+  let current: Record<string, unknown> | unknown[] = obj;
+
+  for (let i = 0; i < segments.length - 1; i++) {
+    const segment = segments[i]!;
+    const nextSegment = segments[i + 1];
+    const nextIsNumeric =
+      nextSegment !== undefined &&
+      (isNumericIndex(nextSegment) || nextSegment === "-");
+
+    if (Array.isArray(current)) {
+      const index = parseInt(segment, 10);
+      if (current[index] === undefined || typeof current[index] !== "object") {
+        current[index] = nextIsNumeric ? [] : {};
+      }
+      current = current[index] as Record<string, unknown> | unknown[];
+    } else {
+      if (!(segment in current) || typeof current[segment] !== "object") {
+        current[segment] = nextIsNumeric ? [] : {};
+      }
+      current = current[segment] as Record<string, unknown> | unknown[];
+    }
+  }
+
+  const lastSegment = segments[segments.length - 1]!;
+  if (Array.isArray(current)) {
+    if (lastSegment === "-") {
+      current.push(value);
+    } else {
+      const index = parseInt(lastSegment, 10);
+      current.splice(index, 0, value);
+    }
+  } else {
+    current[lastSegment] = value;
+  }
+}
+
+/**
+ * Remove a value per RFC 6902 "remove" semantics.
+ * For objects: delete the property.
+ * For arrays: splice out the element at the given index.
+ */
+export function removeByPath(obj: Record<string, unknown>, path: string): void {
+  const segments = parseJsonPointer(path);
+
+  if (segments.length === 0) return;
+
+  let current: Record<string, unknown> | unknown[] = obj;
+
+  for (let i = 0; i < segments.length - 1; i++) {
+    const segment = segments[i]!;
+
+    if (Array.isArray(current)) {
+      const index = parseInt(segment, 10);
+      if (current[index] === undefined || typeof current[index] !== "object") {
+        return; // path does not exist
+      }
+      current = current[index] as Record<string, unknown> | unknown[];
+    } else {
+      if (!(segment in current) || typeof current[segment] !== "object") {
+        return; // path does not exist
+      }
+      current = current[segment] as Record<string, unknown> | unknown[];
+    }
+  }
+
+  const lastSegment = segments[segments.length - 1]!;
+  if (Array.isArray(current)) {
+    const index = parseInt(lastSegment, 10);
+    if (index >= 0 && index < current.length) {
+      current.splice(index, 1);
+    }
+  } else {
+    delete current[lastSegment];
+  }
+}
+
+/**
+ * Deep equality check for RFC 6902 "test" operation.
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== "object") return false;
+
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    return a.every((item, i) => deepEqual(item, b[i]));
+  }
+
+  const aObj = a as Record<string, unknown>;
+  const bObj = b as Record<string, unknown>;
+  const aKeys = Object.keys(aObj);
+  const bKeys = Object.keys(bObj);
+
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key) => deepEqual(aObj[key], bObj[key]));
 }
 
 /**
@@ -345,17 +482,50 @@ export function parseSpecStreamLine(line: string): SpecStreamLine | null {
 }
 
 /**
- * Apply a single SpecStream patch to an object.
+ * Apply a single RFC 6902 JSON Patch operation to an object.
  * Mutates the object in place.
+ *
+ * Supports all six RFC 6902 operations: add, remove, replace, move, copy, test.
+ *
+ * @throws {Error} If a "test" operation fails (value mismatch).
  */
 export function applySpecStreamPatch<T extends Record<string, unknown>>(
   obj: T,
   patch: SpecStreamLine,
 ): T {
-  if (patch.op === "set" || patch.op === "add" || patch.op === "replace") {
-    setByPath(obj, patch.path, patch.value);
-  } else if (patch.op === "remove") {
-    setByPath(obj, patch.path, undefined);
+  switch (patch.op) {
+    case "add":
+      addByPath(obj, patch.path, patch.value);
+      break;
+    case "replace":
+      // RFC 6902: target must exist. For streaming tolerance we set regardless.
+      setByPath(obj, patch.path, patch.value);
+      break;
+    case "remove":
+      removeByPath(obj, patch.path);
+      break;
+    case "move": {
+      if (!patch.from) break;
+      const moveValue = getByPath(obj, patch.from);
+      removeByPath(obj, patch.from);
+      addByPath(obj, patch.path, moveValue);
+      break;
+    }
+    case "copy": {
+      if (!patch.from) break;
+      const copyValue = getByPath(obj, patch.from);
+      addByPath(obj, patch.path, copyValue);
+      break;
+    }
+    case "test": {
+      const actual = getByPath(obj, patch.path);
+      if (!deepEqual(actual, patch.value)) {
+        throw new Error(
+          `Test operation failed: value at "${patch.path}" does not match`,
+        );
+      }
+      break;
+    }
   }
   return obj;
 }
@@ -365,8 +535,8 @@ export function applySpecStreamPatch<T extends Record<string, unknown>>(
  * Each line should be a patch operation.
  *
  * @example
- * const stream = `{"op":"set","path":"/name","value":"Alice"}
- * {"op":"set","path":"/age","value":30}`;
+ * const stream = `{"op":"add","path":"/name","value":"Alice"}
+ * {"op":"add","path":"/age","value":30}`;
  * const result = compileSpecStream(stream);
  * // { name: "Alice", age: 30 }
  */

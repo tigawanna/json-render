@@ -25,11 +25,12 @@ function remotionPromptTemplate(context: PromptContext): string {
   lines.push("");
   lines.push("Example output (each line is a separate JSON object):");
   lines.push("");
-  lines.push(`{"op":"set","path":"/composition","value":{"id":"intro","fps":30,"width":1920,"height":1080,"durationInFrames":300}}
-{"op":"set","path":"/tracks","value":[{"id":"main","name":"Main","type":"video","enabled":true},{"id":"overlay","name":"Overlay","type":"overlay","enabled":true}]}
-{"op":"set","path":"/clips/0","value":{"id":"clip-1","trackId":"main","component":"TitleCard","props":{"title":"Welcome","subtitle":"Getting Started"},"from":0,"durationInFrames":90,"transitionIn":{"type":"fade","durationInFrames":15},"transitionOut":{"type":"fade","durationInFrames":15},"motion":{"enter":{"opacity":0,"y":50,"scale":0.9,"duration":25},"spring":{"damping":15}}}}
-{"op":"set","path":"/clips/1","value":{"id":"clip-2","trackId":"main","component":"TitleCard","props":{"title":"Features"},"from":90,"durationInFrames":90,"motion":{"enter":{"opacity":0,"x":-100,"duration":20},"exit":{"opacity":0,"x":100,"duration":15}}}}
-{"op":"set","path":"/audio","value":{"tracks":[]}}`);
+  lines.push(`{"op":"add","path":"/composition","value":{"id":"intro","fps":30,"width":1920,"height":1080,"durationInFrames":300}}
+{"op":"add","path":"/tracks","value":[{"id":"main","name":"Main","type":"video","enabled":true},{"id":"overlay","name":"Overlay","type":"overlay","enabled":true}]}
+{"op":"add","path":"/clips","value":[]}
+{"op":"add","path":"/clips/-","value":{"id":"clip-1","trackId":"main","component":"TitleCard","props":{"title":"Welcome","subtitle":"Getting Started"},"from":0,"durationInFrames":90,"transitionIn":{"type":"fade","durationInFrames":15},"transitionOut":{"type":"fade","durationInFrames":15},"motion":{"enter":{"opacity":0,"y":50,"scale":0.9,"duration":25},"spring":{"damping":15}}}}
+{"op":"add","path":"/clips/-","value":{"id":"clip-2","trackId":"main","component":"TitleCard","props":{"title":"Features"},"from":90,"durationInFrames":90,"motion":{"enter":{"opacity":0,"x":-100,"duration":20},"exit":{"opacity":0,"x":100,"duration":15}}}}
+{"op":"add","path":"/audio","value":{"tracks":[]}}`);
   lines.push("");
 
   // Components
@@ -107,10 +108,10 @@ function remotionPromptTemplate(context: PromptContext): string {
   lines.push("RULES:");
   const baseRules = [
     "Output ONLY JSONL patches - one JSON object per line, no markdown, no code fences",
-    "First set /composition with {id, fps:30, width:1920, height:1080, durationInFrames}",
-    "Then set /tracks array with video/overlay tracks",
-    "Then set each clip: /clips/0, /clips/1, etc.",
-    "Finally set /audio with {tracks:[]}",
+    'First add /composition with {id, fps:30, width:1920, height:1080, durationInFrames}: {"op":"add","path":"/composition","value":{...}}',
+    'Then add /tracks array with video/overlay tracks: {"op":"add","path":"/tracks","value":[...]}',
+    'Then add each clip by appending to the array: {"op":"add","path":"/clips/-","value":{...}}',
+    'Finally add /audio with {tracks:[]}: {"op":"add","path":"/audio","value":{...}}',
     "ONLY use components listed above",
     "fps is always 30 (1 second = 30 frames, 10 seconds = 300 frames)",
     'Clips on "main" track flow sequentially (from = previous clip\'s from + durationInFrames)',

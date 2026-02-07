@@ -28,8 +28,10 @@ export {
   resolveDynamicValue,
   getByPath,
   setByPath,
+  addByPath,
+  removeByPath,
   findFormValue,
-  // SpecStream - streaming format for building specs
+  // SpecStream - streaming format for building specs (RFC 6902)
   parseSpecStreamLine,
   applySpecStreamPatch,
   compileSpecStream,

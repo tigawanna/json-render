@@ -35,7 +35,7 @@ const SIMULATION_STAGES: SimulationStage[] = [
         },
       },
     },
-    stream: '{"op":"set","path":"/root","value":"card"}',
+    stream: '{"op":"add","path":"/root","value":"card"}',
   },
   {
     tree: {

@@ -545,10 +545,10 @@ function generatePrompt<TDef extends SchemaDefinition, TCatalog>(
   lines.push("");
   lines.push("Example output (each line is a separate JSON object):");
   lines.push("");
-  lines.push(`{"op":"set","path":"/root","value":"card-1"}
-{"op":"set","path":"/elements/card-1","value":{"type":"Card","props":{"title":"Dashboard"},"children":["metric-1","chart-1"]}}
-{"op":"set","path":"/elements/metric-1","value":{"type":"Metric","props":{"label":"Revenue","valuePath":"analytics.revenue","format":"currency"},"children":[]}}
-{"op":"set","path":"/elements/chart-1","value":{"type":"Chart","props":{"type":"bar","dataPath":"analytics.salesByRegion"},"children":[]}}`);
+  lines.push(`{"op":"add","path":"/root","value":"card-1"}
+{"op":"add","path":"/elements/card-1","value":{"type":"Card","props":{"title":"Dashboard"},"children":["metric-1","chart-1"]}}
+{"op":"add","path":"/elements/metric-1","value":{"type":"Metric","props":{"label":"Revenue","valuePath":"analytics.revenue","format":"currency"},"children":[]}}
+{"op":"add","path":"/elements/chart-1","value":{"type":"Chart","props":{"type":"bar","dataPath":"analytics.salesByRegion"},"children":[]}}`);
   lines.push("");
 
   // Components section
@@ -591,8 +591,8 @@ function generatePrompt<TDef extends SchemaDefinition, TCatalog>(
   lines.push("RULES:");
   const baseRules = [
     "Output ONLY JSONL patches - one JSON object per line, no markdown, no code fences",
-    'First line sets root: {"op":"set","path":"/root","value":"<root-key>"}',
-    'Then add each element: {"op":"set","path":"/elements/<key>","value":{...}}',
+    'First line sets root: {"op":"add","path":"/root","value":"<root-key>"}',
+    'Then add each element: {"op":"add","path":"/elements/<key>","value":{...}}',
     "ONLY use components listed above",
     "Each element value needs: type, props, children (array of child keys)",
     "Use unique keys for the element map entries (e.g., 'header', 'metric-1', 'chart-revenue')",

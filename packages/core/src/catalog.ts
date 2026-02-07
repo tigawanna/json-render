@@ -493,8 +493,8 @@ export function generateSystemPrompt<
   }
 
   // Output format
-  lines.push("OUTPUT FORMAT (JSONL):");
-  lines.push('{"op":"set","path":"/root","value":"element-key"}');
+  lines.push("OUTPUT FORMAT (JSONL, RFC 6902 JSON Patch):");
+  lines.push('{"op":"add","path":"/root","value":"element-key"}');
   lines.push(
     '{"op":"add","path":"/elements/key","value":{"type":"...","props":{...},"children":[...]}}',
   );
@@ -504,8 +504,8 @@ export function generateSystemPrompt<
   // Rules
   lines.push("RULES:");
   const baseRules = [
-    "First line sets /root to root element key",
-    "Add elements with /elements/{key}",
+    'First line sets /root to root element key: {"op":"add","path":"/root","value":"<key>"}',
+    'Add elements with /elements/{key}: {"op":"add","path":"/elements/<key>","value":{...}}',
     "Remove elements with op:remove - also update the parent's children array to exclude the removed key",
     "Children array contains string keys, not objects",
     "Parent first, then children",

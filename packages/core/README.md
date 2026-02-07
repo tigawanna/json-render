@@ -116,13 +116,15 @@ while (streaming) {
 const finalSpec = compiler.getResult();
 ```
 
-SpecStream format (each line is a JSON patch):
+SpecStream format uses [RFC 6902 JSON Patch](https://datatracker.ietf.org/doc/html/rfc6902) operations (each line is a patch):
 
 ```jsonl
-{"op":"set","path":"/root/type","value":"Card"}
-{"op":"set","path":"/root/props","value":{"title":"Hello"}}
-{"op":"set","path":"/root/children/0","value":{"type":"Button","props":{"label":"Click"}}}
+{"op":"add","path":"/root/type","value":"Card"}
+{"op":"add","path":"/root/props","value":{"title":"Hello"}}
+{"op":"add","path":"/root/children/0","value":{"type":"Button","props":{"label":"Click"}}}
 ```
+
+All six RFC 6902 operations are supported: `add`, `remove`, `replace`, `move`, `copy`, `test`.
 
 ### Low-Level Utilities
 
@@ -134,8 +136,8 @@ import {
 } from "@json-render/core";
 
 // Parse a single line
-const patch = parseSpecStreamLine('{"op":"set","path":"/root","value":{}}');
-// { op: "set", path: "/root", value: {} }
+const patch = parseSpecStreamLine('{"op":"add","path":"/root","value":{}}');
+// { op: "add", path: "/root", value: {} }
 
 // Apply a patch to an object
 const obj = {};
