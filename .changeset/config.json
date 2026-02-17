@@ -6,6 +6,7 @@
     [
       "@json-render/core",
       "@json-render/react",
+      "@json-render/shadcn",
       "@json-render/react-native",
       "@json-render/remotion",
       "@json-render/codegen"
