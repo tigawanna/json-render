@@ -2,9 +2,13 @@ import {
   computed,
   defineComponent,
   h,
+  inject,
   onErrorCaptured,
+  provide,
   ref,
+  watch,
   type Component,
+  type ComputedRef,
   type PropType,
   type VNode,
 } from "vue";
@@ -13,6 +17,7 @@ import type {
   Spec,
   ActionBinding,
   Catalog,
+  ComputedFunction,
   SchemaDefinition,
   StateStore,
 } from "@json-render/core";
@@ -81,6 +86,35 @@ export interface RendererProps {
 }
 
 // ---------------------------------------------------------------------------
+// FunctionsContext — provides $computed functions to the element tree
+// ---------------------------------------------------------------------------
+
+const EMPTY_FUNCTIONS: Record<string, ComputedFunction> = {};
+const FUNCTIONS_KEY = Symbol("json-render:functions");
+
+const FunctionsProvider = defineComponent({
+  name: "FunctionsProvider",
+  props: {
+    functions: {
+      type: Object as PropType<Record<string, ComputedFunction>>,
+      default: undefined,
+    },
+  },
+  setup(props, { slots }) {
+    const fns = computed(() => props.functions ?? EMPTY_FUNCTIONS);
+    provide(FUNCTIONS_KEY, fns);
+    return () => slots.default?.();
+  },
+});
+
+function useFunctions(): ComputedRef<Record<string, ComputedFunction>> {
+  return inject<ComputedRef<Record<string, ComputedFunction>>>(
+    FUNCTIONS_KEY,
+    computed(() => EMPTY_FUNCTIONS),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ElementErrorBoundary — catches rendering errors in individual elements
 // ---------------------------------------------------------------------------
 
@@ -110,6 +144,37 @@ const ElementErrorBoundary = defineComponent({
     };
   },
 });
+
+// ---------------------------------------------------------------------------
+// resolveAndExecuteBindings — shared helper for emitEvent / watch handlers
+// ---------------------------------------------------------------------------
+
+async function resolveAndExecuteBindings(
+  actionBindings: ActionBinding[],
+  ctx: PropResolutionContext,
+  getSnapshot: () => Record<string, unknown>,
+  execute: (binding: ActionBinding) => Promise<void>,
+  cancelled?: () => boolean,
+): Promise<void> {
+  for (const b of actionBindings) {
+    if (cancelled?.()) break;
+    if (!b.params) {
+      await execute(b);
+      if (cancelled?.()) break;
+      continue;
+    }
+    const liveCtx: PropResolutionContext = {
+      ...ctx,
+      stateModel: getSnapshot(),
+    };
+    const resolved: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(b.params)) {
+      resolved[key] = resolveActionParam(val, liveCtx);
+    }
+    await execute({ ...b, params: resolved });
+    if (cancelled?.()) break;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // ElementRenderer — renders a single element from the spec
@@ -151,19 +216,20 @@ const ElementRenderer = defineComponent({
     const repeatScope = useRepeatScope();
     const { ctx: visibilityCtx } = useVisibility();
     const { execute } = useActions();
-    const { getSnapshot } = useStateStore();
+    const { getSnapshot, state: watchState } = useStateStore();
+    const functions = useFunctions();
 
-    // Build context with repeat scope
+    // Build context with repeat scope and $computed functions
     const fullCtx = computed<PropResolutionContext>(() => {
-      const base = visibilityCtx.value;
-      if (repeatScope) {
-        return {
-          ...base,
-          repeatItem: repeatScope.item,
-          repeatIndex: repeatScope.index,
-          repeatBasePath: repeatScope.basePath,
-        };
-      }
+      const base: PropResolutionContext = repeatScope
+        ? {
+            ...visibilityCtx.value,
+            repeatItem: repeatScope.item,
+            repeatIndex: repeatScope.index,
+            repeatBasePath: repeatScope.basePath,
+          }
+        : { ...visibilityCtx.value };
+      base.functions = functions.value;
       return base;
     });
 
@@ -172,21 +238,12 @@ const ElementRenderer = defineComponent({
       const binding = props.element.on?.[eventName];
       if (!binding) return;
       const actionBindings = Array.isArray(binding) ? binding : [binding];
-      for (const b of actionBindings) {
-        if (!b.params) {
-          await execute(b);
-          continue;
-        }
-        const liveCtx: PropResolutionContext = {
-          ...fullCtx.value,
-          stateModel: getSnapshot(),
-        };
-        const resolved: Record<string, unknown> = {};
-        for (const [key, val] of Object.entries(b.params)) {
-          resolved[key] = resolveActionParam(val, liveCtx);
-        }
-        await execute({ ...b, params: resolved });
-      }
+      await resolveAndExecuteBindings(
+        actionBindings,
+        fullCtx.value,
+        getSnapshot,
+        execute,
+      );
     };
 
     // Create on() function
@@ -205,6 +262,49 @@ const ElementRenderer = defineComponent({
         bound: true,
       };
     };
+
+    // Watch effect: fire actions when watched state paths change.
+    const watchedValues = computed(() => {
+      const cfg = props.element.watch;
+      if (!cfg) return undefined;
+      const values: Record<string, unknown> = {};
+      for (const path of Object.keys(cfg)) {
+        values[path] = getByPath(watchState.value, path);
+      }
+      return values;
+    });
+
+    watch(
+      watchedValues,
+      (current, prev, onCleanup) => {
+        const cfg = props.element.watch;
+        if (!cfg || !current) return;
+
+        let cancelled = false;
+        onCleanup(() => {
+          cancelled = true;
+        });
+
+        const paths = Object.keys(cfg);
+        void (async () => {
+          for (const path of paths) {
+            if (cancelled) break;
+            if (prev && current[path] === prev[path]) continue;
+            const binding = cfg[path];
+            if (!binding) continue;
+            const bindings = Array.isArray(binding) ? binding : [binding];
+            await resolveAndExecuteBindings(
+              bindings,
+              fullCtx.value,
+              getSnapshot,
+              execute,
+              () => cancelled,
+            );
+          }
+        })().catch(console.error);
+      },
+      { deep: true },
+    );
 
     return () => {
       const ctx = fullCtx.value;
@@ -322,10 +422,11 @@ const RepeatChildren = defineComponent({
     const { state } = useStateStore();
 
     return () => {
-      const repeat = props.element.repeat!;
+      const repeat = props.element.repeat;
+      if (!repeat?.statePath) return null;
       const statePath = repeat.statePath;
-      const items =
-        (getByPath(state.value, statePath) as unknown[] | undefined) ?? [];
+      const raw = getByPath(state.value, statePath);
+      const items = Array.isArray(raw) ? (raw as unknown[]) : [];
 
       return items.map((itemValue, index) => {
         const key =
@@ -454,6 +555,8 @@ export interface JSONUIProviderProps {
     string,
     (value: unknown, args?: Record<string, unknown>) => boolean
   >;
+  /** Named functions for `$computed` expressions in props */
+  functions?: Record<string, ComputedFunction>;
   onStateChange?: (changes: Array<{ path: string; value: unknown }>) => void;
 }
 
@@ -497,6 +600,10 @@ export const JSONUIProvider = defineComponent({
       >,
       default: undefined,
     },
+    functions: {
+      type: Object as PropType<Record<string, ComputedFunction>>,
+      default: undefined,
+    },
     onStateChange: {
       type: Function as PropType<
         (changes: Array<{ path: string; value: unknown }>) => void
@@ -518,18 +625,25 @@ export const JSONUIProvider = defineComponent({
             h(VisibilityProvider, null, {
               default: () =>
                 h(
-                  ActionProvider,
-                  { handlers: props.handlers, navigate: props.navigate },
+                  ValidationProvider,
+                  { customFunctions: props.validationFunctions },
                   {
                     default: () =>
                       h(
-                        ValidationProvider,
-                        { customFunctions: props.validationFunctions },
+                        ActionProvider,
+                        { handlers: props.handlers, navigate: props.navigate },
                         {
-                          default: () => [
-                            slots.default?.(),
-                            h(ConfirmationDialogManager),
-                          ],
+                          default: () =>
+                            h(
+                              FunctionsProvider,
+                              { functions: props.functions },
+                              {
+                                default: () => [
+                                  slots.default?.(),
+                                  h(ConfirmationDialogManager),
+                                ],
+                              },
+                            ),
                         },
                       ),
                   },
@@ -704,6 +818,8 @@ export interface CreateRendererProps {
   state?: Record<string, unknown>;
   onAction?: (actionName: string, params?: Record<string, unknown>) => void;
   onStateChange?: (changes: Array<{ path: string; value: unknown }>) => void;
+  /** Named functions for `$computed` expressions in props */
+  functions?: Record<string, ComputedFunction>;
   loading?: boolean;
   fallback?: Component;
 }
@@ -768,6 +884,10 @@ export function createRenderer<
         >,
         default: undefined,
       },
+      functions: {
+        type: Object as PropType<Record<string, ComputedFunction>>,
+        default: undefined,
+      },
       loading: {
         type: Boolean,
         default: undefined,
@@ -807,24 +927,31 @@ export function createRenderer<
             default: () =>
               h(VisibilityProvider, null, {
                 default: () =>
-                  h(
-                    ActionProvider,
-                    { handlers: actionHandlers },
-                    {
-                      default: () =>
-                        h(ValidationProvider, null, {
-                          default: () => [
-                            h(Renderer, {
-                              spec: rendererProps.spec,
-                              registry,
-                              loading: rendererProps.loading,
-                              fallback: rendererProps.fallback,
-                            }),
-                            h(ConfirmationDialogManager),
-                          ],
-                        }),
-                    },
-                  ),
+                  h(ValidationProvider, null, {
+                    default: () =>
+                      h(
+                        ActionProvider,
+                        { handlers: actionHandlers },
+                        {
+                          default: () =>
+                            h(
+                              FunctionsProvider,
+                              { functions: rendererProps.functions },
+                              {
+                                default: () => [
+                                  h(Renderer, {
+                                    spec: rendererProps.spec,
+                                    registry,
+                                    loading: rendererProps.loading,
+                                    fallback: rendererProps.fallback,
+                                  }),
+                                  h(ConfirmationDialogManager),
+                                ],
+                              },
+                            ),
+                        },
+                      ),
+                  }),
               }),
           },
         );

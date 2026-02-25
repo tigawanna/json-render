@@ -70,7 +70,7 @@ export const schema = defineSchema(
       {
         name: "validateForm",
         description:
-          "Validate all registered form fields and write the result to state. Params: { statePath?: string }. Defaults to /formValidation. Result: { valid: boolean }.",
+          "Validate all registered form fields and write the result to state. Params: { statePath?: string }. Defaults to /formValidation. Result: { valid: boolean, errors: Record<string, string[]> }.",
       },
     ],
     defaultRules: [

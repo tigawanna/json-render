@@ -91,7 +91,7 @@ export const { registry } = defineRegistry(catalog, {
 });
 ```
 
-> **Note:** Vue does not have `useBoundProp`. For two-way binding, use `{ "$bindState": "/path" }` on the value prop and handle the `bindings` object in your component.
+> **Tip:** Use `useBoundProp(props.value, bindings?.value)` for two-way binding, or handle the `bindings` object directly in your component.
 
 ### 3. Render Specs
 
@@ -345,7 +345,7 @@ See [@json-render/core](../core/README.md) for full expression syntax.
 
 ## Built-in Actions
 
-The `setState`, `pushState`, and `removeState` actions are built into the Vue schema and handled automatically by `ActionProvider`. They are injected into AI prompts without needing to be declared in your catalog's `actions`. They update the state model, which triggers re-evaluation of visibility conditions and dynamic prop expressions:
+The `setState`, `pushState`, `removeState`, and `validateForm` actions are built into the Vue schema and handled automatically by `ActionProvider`. They are injected into AI prompts without needing to be declared in your catalog's `actions`. They update the state model, which triggers re-evaluation of visibility conditions and dynamic prop expressions:
 
 ```json
 {
@@ -492,5 +492,5 @@ const spec = {
 |-----|-------|-----|------|
 | `useStateStore().state` | `StateModel` | `ShallowRef<StateModel>` | Vue reactivity; use `state.value` |
 | `children` type | `React.ReactNode` | `VNode \| VNode[]` | Platform-specific |
-| `useBoundProp` | exported | not available | React-specific; use `bindings` directly in Vue |
-| Streaming hooks | `useUIStream`, `useChatUI` | not available | Vue package is UI-only for now |
+| `useBoundProp` | exported | exported | Same API; returns `[value, setValue]` |
+| Streaming hooks | `useUIStream`, `useChatUI` | `useUIStream`, `useChatUI` | Same API; returns Vue `Ref` values |

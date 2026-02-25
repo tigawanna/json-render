@@ -241,6 +241,6 @@ const {
 | `useFieldValidation().isValid` | `boolean` | `ComputedRef<boolean>` | Vue reactivity; use `.value` |
 | `VisibilityContextValue.ctx` | `CoreVisibilityContext` | `ComputedRef<CoreVisibilityContext>` | Vue reactivity; use `ctx.value` |
 | `children` type | `React.ReactNode` | `VNode \| VNode[]` | Platform-specific |
-| `useBoundProp` | exported | not available | React-specific; use `bindings` directly in Vue |
+| `useBoundProp` | exported | exported | Same API; returns `[value, setValue]` |
 | `VisibilityProviderProps` | exported | not exported (no props) | Vue uses slot, no prop needed |
-| Streaming hooks | `useUIStream`, `useChatUI` | not available | Vue package is UI-only for now |
+| Streaming hooks | `useUIStream`, `useChatUI` | `useUIStream`, `useChatUI` | Same API; returns Vue `Ref` values |

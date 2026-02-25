@@ -56,9 +56,9 @@ function mountRenderer(
       default: () =>
         h(VisibilityProvider as Component, null, {
           default: () =>
-            h(ActionProvider as Component, { handlers } as any, {
+            h(ValidationProvider as Component, null, {
               default: () =>
-                h(ValidationProvider as Component, null, {
+                h(ActionProvider as Component, { handlers } as any, {
                   default: () =>
                     h(Renderer, { spec, registry: reg, ...extraProps }),
                 }),

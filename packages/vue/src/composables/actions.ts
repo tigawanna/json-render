@@ -18,6 +18,7 @@ import {
   type ResolvedAction,
 } from "@json-render/core";
 import { useStateStore } from "./state";
+import { useOptionalValidation } from "./validation";
 
 /**
  * Generate a unique ID for use with the "$id" token.
@@ -120,6 +121,7 @@ export const ActionProvider = defineComponent({
   },
   setup(props, { slots }) {
     const { get, set, getSnapshot } = useStateStore();
+    const validation = useOptionalValidation();
 
     const handlers = ref<Record<string, ActionHandler>>(props.handlers ?? {});
     const loadingActions = ref<Set<string>>(new Set());
@@ -179,6 +181,29 @@ export const ActionProvider = defineComponent({
             arr.filter((_, i) => i !== index),
           );
         }
+        return;
+      }
+
+      // Built-in: validateForm — triggers validateAll and writes result to state
+      if (resolved.action === "validateForm") {
+        const validateAll = validation?.validateAll;
+        if (!validateAll) {
+          console.warn(
+            "validateForm action was dispatched but no ValidationProvider is connected. " +
+              "Ensure ValidationProvider is rendered inside the provider tree.",
+          );
+          return;
+        }
+        const valid = validateAll();
+        const errors: Record<string, string[]> = {};
+        for (const [path, fs] of Object.entries(validation.fieldStates)) {
+          if (fs.result && !fs.result.valid) {
+            errors[path] = fs.result.errors;
+          }
+        }
+        const statePath =
+          (resolved.params?.statePath as string) || "/formValidation";
+        set(statePath, { valid, errors });
         return;
       }
 

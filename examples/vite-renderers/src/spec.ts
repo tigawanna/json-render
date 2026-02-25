@@ -96,7 +96,7 @@ export const demoSpec: Spec = {
     // ---- Milestone badge (visible only when count >= 10) ----
     "milestone-badge": {
       type: "Badge",
-      props: { label: "🎉 Milestone reached: 10!", color: "#10b981" },
+      props: { label: "Milestone reached: 10!", color: "#10b981" },
       visible: { $state: "/count", gte: 10 },
     },
 

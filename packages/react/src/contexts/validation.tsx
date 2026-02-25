@@ -3,6 +3,7 @@
 import React, {
   createContext,
   useContext,
+  useRef,
   useState,
   useCallback,
   useMemo,
@@ -134,6 +135,9 @@ export function ValidationProvider({
   const [fieldStates, setFieldStates] = useState<
     Record<string, FieldValidationState>
   >({});
+  // Mutable mirror of fieldStates for synchronous reads (e.g. reading errors
+  // immediately after validateAll() before React flushes the batched setState).
+  const fieldStatesRef = useRef<Record<string, FieldValidationState>>({});
   const [fieldConfigs, setFieldConfigs] = useState<
     Record<string, ValidationConfig>
   >({});
@@ -175,14 +179,16 @@ export function ValidationProvider({
         customFunctions,
       });
 
-      setFieldStates((prev) => ({
-        ...prev,
-        [path]: {
-          touched: prev[path]?.touched ?? true,
-          validated: true,
-          result,
-        },
-      }));
+      const newFieldState: FieldValidationState = {
+        touched: fieldStatesRef.current[path]?.touched ?? true,
+        validated: true,
+        result,
+      };
+      fieldStatesRef.current = {
+        ...fieldStatesRef.current,
+        [path]: newFieldState,
+      };
+      setFieldStates(fieldStatesRef.current);
 
       return result;
     },
@@ -190,22 +196,22 @@ export function ValidationProvider({
   );
 
   const touch = useCallback((path: string) => {
-    setFieldStates((prev) => ({
-      ...prev,
+    fieldStatesRef.current = {
+      ...fieldStatesRef.current,
       [path]: {
-        ...prev[path],
+        ...fieldStatesRef.current[path],
         touched: true,
-        validated: prev[path]?.validated ?? false,
-        result: prev[path]?.result ?? null,
+        validated: fieldStatesRef.current[path]?.validated ?? false,
+        result: fieldStatesRef.current[path]?.result ?? null,
       },
-    }));
+    };
+    setFieldStates(fieldStatesRef.current);
   }, []);
 
   const clear = useCallback((path: string) => {
-    setFieldStates((prev) => {
-      const { [path]: _, ...rest } = prev;
-      return rest;
-    });
+    const { [path]: _, ...rest } = fieldStatesRef.current;
+    fieldStatesRef.current = rest;
+    setFieldStates(rest);
   }, []);
 
   const validateAll = useCallback(() => {
@@ -224,7 +230,11 @@ export function ValidationProvider({
   const value = useMemo<ValidationContextValue>(
     () => ({
       customFunctions,
-      fieldStates,
+      // Getter returns the mutable ref so callers that read fieldStates
+      // synchronously after validateAll() see the latest values.
+      get fieldStates() {
+        return fieldStatesRef.current;
+      },
       validate,
       touch,
       clear,
@@ -233,6 +243,8 @@ export function ValidationProvider({
     }),
     [
       customFunctions,
+      // fieldStates (React state) stays in deps so the context value object
+      // is recreated on re-render, triggering downstream consumers.
       fieldStates,
       validate,
       touch,

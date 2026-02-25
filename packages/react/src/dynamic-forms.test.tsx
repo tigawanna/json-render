@@ -546,7 +546,10 @@ describe("validateForm action", () => {
     });
 
     const state = getState();
-    expect(state.result).toEqual({ valid: false });
+    expect(state.result).toEqual({
+      valid: false,
+      errors: { "/form/email": ["Email is required"] },
+    });
   });
 
   it("writes { valid: true } when all fields pass validation", async () => {
@@ -601,7 +604,7 @@ describe("validateForm action", () => {
     });
 
     const state = getState();
-    expect(state.result).toEqual({ valid: true });
+    expect(state.result).toEqual({ valid: true, errors: {} });
   });
 
   it("defaults to /formValidation when no statePath is provided", async () => {
@@ -651,7 +654,7 @@ describe("validateForm action", () => {
     });
 
     const state = getState();
-    expect(state.formValidation).toEqual({ valid: true });
+    expect(state.formValidation).toEqual({ valid: true, errors: {} });
   });
 });
 
