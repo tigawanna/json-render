@@ -1,5 +1,12 @@
 # @json-render/zustand
 
+## 0.16.0
+
+### Patch Changes
+
+- Updated dependencies [519a538]
+  - @json-render/core@0.16.0
+
 ## 0.15.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # example-solid
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [519a538]
+  - @json-render/core@0.16.0
+  - @json-render/solid@0.16.0
+
 ## 0.1.4
 
 ### Patch Changes

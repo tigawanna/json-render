@@ -1,5 +1,13 @@
 # com.example.json-render-fullpage-demo
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [519a538]
+  - @json-render/core@0.16.0
+  - @json-render/react@0.16.0
+
 ## 0.0.11
 
 ### Patch Changes

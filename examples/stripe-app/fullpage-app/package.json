@@ -1,6 +1,6 @@
 {
   "name": "com.example.json-render-fullpage-demo",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "Full-page Stripe App example (alpha)",
   "private": true,
   "license": "~~proprietary~~",
