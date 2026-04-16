@@ -189,6 +189,70 @@ describe("catalog.prompt", () => {
     expect(prompt).toContain("users: Array<{ name: string, age: number }>");
   });
 
+  it("formats z.literal() as quoted value", () => {
+    const catalog = defineCatalog(testSchema, {
+      components: {
+        Config: {
+          props: z.object({
+            version: z.literal("3.0"),
+            count: z.literal(42),
+          }),
+          description: "",
+          slots: [],
+        },
+      },
+      actions: {},
+    });
+    const prompt = catalog.prompt();
+    expect(prompt).toContain('version: "3.0"');
+    expect(prompt).toContain("count: 42");
+  });
+
+  it("formats z.default() by unwrapping to inner type", () => {
+    const catalog = defineCatalog(testSchema, {
+      components: {
+        Form: {
+          props: z.object({
+            enabled: z.boolean().default(false),
+            count: z.number().default(0),
+            tags: z.array(z.string()).default([]),
+          }),
+          description: "",
+          slots: [],
+        },
+      },
+      actions: {},
+    });
+    const prompt = catalog.prompt();
+    expect(prompt).toContain("enabled: boolean");
+    expect(prompt).toContain("count: number");
+    expect(prompt).toContain("tags: Array<string>");
+  });
+
+  it("formats z.record() as Record<K, V>", () => {
+    const catalog = defineCatalog(testSchema, {
+      components: {
+        Store: {
+          props: z.object({
+            simple: z.record(z.string(), z.number()),
+            nested: z.record(
+              z.string(),
+              z.object({ id: z.string(), score: z.number() }),
+            ),
+          }),
+          description: "",
+          slots: [],
+        },
+      },
+      actions: {},
+    });
+    const prompt = catalog.prompt();
+    expect(prompt).toContain("simple: Record<string, number>");
+    expect(prompt).toContain(
+      "nested: Record<string, { id: string, score: number }>",
+    );
+  });
+
   it("includes AVAILABLE ACTIONS when present", () => {
     const catalog = defineCatalog(testSchema, {
       components: {
