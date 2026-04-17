@@ -140,6 +140,9 @@
   import {
     resolveAction,
     executeAction,
+    nextActionDispatchId,
+    notifyActionDispatch,
+    notifyActionSettle,
     type ActionBinding as CoreActionBinding,
     type ActionHandler as CoreActionHandler,
   } from "@json-render/core";
@@ -165,6 +168,19 @@
   const execute = async (binding: CoreActionBinding): Promise<void> => {
     const resolved = resolveAction(binding, stateCtx.getSnapshot());
 
+    // --- devtools / observer hooks ---
+    const dispatchId = nextActionDispatchId();
+    const dispatchedAt = Date.now();
+    notifyActionDispatch({
+      id: dispatchId,
+      name: resolved.action,
+      params: resolved.params,
+      at: dispatchedAt,
+    });
+    let __ok = true;
+    let __error: unknown = undefined;
+
+    try {
     if (resolved.action === "setState" && resolved.params) {
       const statePath = resolved.params.statePath as string;
       const value = resolved.params.value;
@@ -313,6 +329,21 @@
       });
     } finally {
       loadingActions.delete(resolved.action);
+    }
+    } catch (err) {
+      __ok = false;
+      __error = err;
+      throw err;
+    } finally {
+      const now = Date.now();
+      notifyActionSettle({
+        id: dispatchId,
+        name: resolved.action,
+        ok: __ok,
+        at: now,
+        durationMs: now - dispatchedAt,
+        error: __error,
+      });
     }
   };
 

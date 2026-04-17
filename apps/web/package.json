@@ -17,6 +17,8 @@
     "@ai-sdk/react": "3.0.79",
     "@json-render/codegen": "workspace:*",
     "@json-render/core": "workspace:*",
+    "@json-render/devtools": "workspace:*",
+    "@json-render/devtools-react": "workspace:*",
     "@json-render/react": "workspace:*",
     "@json-render/yaml": "workspace:*",
     "@mdx-js/loader": "^3.1.1",

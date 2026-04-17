@@ -24,6 +24,8 @@ import {
   resolveActionParam,
   evaluateVisibility,
   getByPath,
+  isDevtoolsActive,
+  subscribeDevtoolsActive,
   type PropResolutionContext,
   type VisibilityContext as CoreVisibilityContext,
 } from "@json-render/core";
@@ -154,10 +156,24 @@ function useFunctions(): Record<string, ComputedFunction> {
 
 interface ElementRendererProps {
   element: UIElement;
+  /** Spec key for this element. Used by the devtools picker. */
+  elementKey?: string;
   spec: Spec;
   registry: ComponentRegistry;
   loading?: boolean;
   fallback?: ComponentRenderer;
+}
+
+/**
+ * Subscribe to whether any devtools is mounted so the renderer can add a
+ * `data-jr-key` wrapper for the picker. Trivially cheap when inactive.
+ */
+function useDevtoolsActive(): boolean {
+  return React.useSyncExternalStore(
+    subscribeDevtoolsActive,
+    isDevtoolsActive,
+    () => false,
+  );
 }
 
 /**
@@ -166,11 +182,13 @@ interface ElementRendererProps {
  */
 const ElementRenderer = React.memo(function ElementRenderer({
   element,
+  elementKey,
   spec,
   registry,
   loading,
   fallback,
 }: ElementRendererProps) {
+  const devtoolsActive = useDevtoolsActive();
   const repeatScope = useRepeatScope();
   const { ctx } = useVisibility();
   const { execute } = useActions();
@@ -372,6 +390,7 @@ const ElementRenderer = React.memo(function ElementRenderer({
         <ElementRenderer
           key={childKey}
           element={childElement}
+          elementKey={childKey}
           spec={spec}
           registry={registry}
           loading={loading}
@@ -381,17 +400,33 @@ const ElementRenderer = React.memo(function ElementRenderer({
     })
   );
 
+  const rendered = (
+    <Component
+      element={resolvedElement}
+      emit={emit}
+      on={on}
+      bindings={elementBindings}
+      loading={loading}
+    >
+      {children}
+    </Component>
+  );
+
+  // When devtools is mounted, wrap each element in a transparent span so the
+  // picker can map DOM nodes back to spec keys. `display: contents` avoids
+  // most layout impact.
+  const tagged =
+    devtoolsActive && elementKey ? (
+      <span data-jr-key={elementKey} style={{ display: "contents" }}>
+        {rendered}
+      </span>
+    ) : (
+      rendered
+    );
+
   return (
     <ElementErrorBoundary elementType={resolvedElement.type}>
-      <Component
-        element={resolvedElement}
-        emit={emit}
-        on={on}
-        bindings={elementBindings}
-        loading={loading}
-      >
-        {children}
-      </Component>
+      {tagged}
     </ElementErrorBoundary>
   );
 });
@@ -452,6 +487,7 @@ function RepeatChildren({
                 <ElementRenderer
                   key={childKey}
                   element={childElement}
+                  elementKey={childKey}
                   spec={spec}
                   registry={registry}
                   loading={loading}
@@ -482,6 +518,7 @@ export function Renderer({ spec, registry, loading, fallback }: RendererProps) {
   return (
     <ElementRenderer
       element={rootElement}
+      elementKey={spec.root}
       spec={spec}
       registry={registry}
       loading={loading}

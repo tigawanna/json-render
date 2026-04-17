@@ -52,6 +52,7 @@ export const docsNavigation: NavSection[] = [
     items: [
       { title: "Custom Schema", href: "/docs/custom-schema" },
       { title: "Code Export", href: "/docs/code-export" },
+      { title: "Devtools", href: "/docs/devtools" },
     ],
   },
   {
@@ -86,6 +87,20 @@ export const docsNavigation: NavSection[] = [
         href: "/docs/api/react-three-fiber",
       },
       { title: "@json-render/codegen", href: "/docs/api/codegen" },
+      { title: "@json-render/devtools", href: "/docs/api/devtools" },
+      {
+        title: "@json-render/devtools-react",
+        href: "/docs/api/devtools-react",
+      },
+      { title: "@json-render/devtools-vue", href: "/docs/api/devtools-vue" },
+      {
+        title: "@json-render/devtools-svelte",
+        href: "/docs/api/devtools-svelte",
+      },
+      {
+        title: "@json-render/devtools-solid",
+        href: "/docs/api/devtools-solid",
+      },
       { title: "@json-render/mcp", href: "/docs/api/mcp" },
       { title: "@json-render/redux", href: "/docs/api/redux" },
       { title: "@json-render/zustand", href: "/docs/api/zustand" },

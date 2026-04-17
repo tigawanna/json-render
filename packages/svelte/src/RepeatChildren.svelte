@@ -35,6 +35,7 @@
         {#if spec.elements[childKey]}
           <ElementRenderer
             element={spec.elements[childKey]}
+            elementKey={childKey}
             {spec}
             {registry}
             {loading}

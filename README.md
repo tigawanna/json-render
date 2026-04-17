@@ -137,6 +137,11 @@ function Dashboard({ spec }) {
 | `@json-render/ink`          | Ink terminal renderer with built-in components for interactive TUIs.   |
 | `@json-render/image`        | Image renderer for SVG/PNG output (OG images, social cards) via Satori |
 | `@json-render/codegen`      | Utilities for generating code from json-render UI trees                |
+| `@json-render/devtools`     | Framework-agnostic devtools core — panel UI, event store, picker, stream taps |
+| `@json-render/devtools-react`   | React adapter for `@json-render/devtools` (drop-in `<JsonRenderDevtools />`)     |
+| `@json-render/devtools-vue`     | Vue adapter for `@json-render/devtools`                                           |
+| `@json-render/devtools-svelte`  | Svelte adapter for `@json-render/devtools`                                        |
+| `@json-render/devtools-solid`   | SolidJS adapter for `@json-render/devtools`                                       |
 | `@json-render/redux`        | Redux / Redux Toolkit adapter for `StateStore`                         |
 | `@json-render/zustand`      | Zustand adapter for `StateStore`                                       |
 | `@json-render/jotai`        | Jotai adapter for `StateStore`                                         |
@@ -561,6 +566,24 @@ const { registry } = defineRegistry(catalog, {
 // In your Svelte component:
 // <Renderer spec={spec} registry={registry} />
 ```
+
+### Devtools
+
+Drop-in inspector panel for any json-render app. Spec tree, state editor, action log, stream log, catalog browser, DOM picker.
+
+```tsx
+// React
+import { JsonRenderDevtools } from "@json-render/devtools-react";
+
+<JSONUIProvider registry={registry} handlers={handlers}>
+  <Renderer spec={spec} registry={registry} />
+  <JsonRenderDevtools spec={spec} catalog={catalog} messages={messages} />
+</JSONUIProvider>;
+```
+
+Floating toggle appears bottom-right. Hotkey: `Ctrl`/`Cmd` + `Shift` + `J`. Tree-shakes to `null` in production.
+
+Available for React, Vue, Svelte, and Solid — swap `@json-render/devtools-react` for the adapter that matches your renderer.
 
 ### Ink (Terminal)
 

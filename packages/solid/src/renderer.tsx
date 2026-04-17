@@ -3,6 +3,7 @@ import {
   useContext,
   createMemo,
   createEffect,
+  createSignal,
   onCleanup,
   ErrorBoundary,
   Show,
@@ -25,6 +26,8 @@ import {
   resolveActionParam,
   evaluateVisibility,
   getByPath,
+  isDevtoolsActive,
+  subscribeDevtoolsActive,
   type PropResolutionContext,
   type VisibilityContext as CoreVisibilityContext,
 } from "@json-render/core";
@@ -110,10 +113,23 @@ function useFunctions(): Record<string, ComputedFunction> {
 
 interface ElementRendererProps {
   element: UIElement;
+  /** Spec key for this element. Used by the devtools picker. */
+  elementKey?: string;
   spec: Spec;
   registry: ComponentRegistry;
   loading?: boolean;
   fallback?: ComponentRenderer;
+}
+
+/**
+ * Reactive mirror of the devtools-active flag. Used to decide whether to
+ * wrap each element with a `data-jr-key` attribute for the picker.
+ */
+function useDevtoolsActive() {
+  const [active, setActive] = createSignal(isDevtoolsActive());
+  const unsub = subscribeDevtoolsActive(() => setActive(isDevtoolsActive()));
+  onCleanup(unsub);
+  return active;
 }
 
 /**
@@ -262,6 +278,7 @@ function ElementRenderer(props: ElementRendererProps) {
       >
         <ElementRendererContent
           resolvedElement={resolvedElement()}
+          elementKey={props.elementKey}
           spec={props.spec}
           registry={props.registry}
           loading={props.loading}
@@ -277,6 +294,7 @@ function ElementRenderer(props: ElementRendererProps) {
 
 interface ElementRendererContentProps {
   resolvedElement: UIElement;
+  elementKey?: string;
   spec: Spec;
   registry: ComponentRegistry;
   loading?: boolean;
@@ -290,6 +308,7 @@ interface ElementRendererContentProps {
  * Inner content renderer, separated so it can be wrapped in Show + ErrorBoundary.
  */
 function ElementRendererContent(props: ElementRendererContentProps) {
+  const devtoolsActive = useDevtoolsActive();
   // Get the component renderer
   const Comp = () =>
     props.registry[props.resolvedElement.type] ?? props.fallback;
@@ -335,6 +354,7 @@ function ElementRendererContent(props: ElementRendererContentProps) {
                     {(el) => (
                       <ElementRenderer
                         element={el()}
+                        elementKey={childKey}
                         spec={props.spec}
                         registry={props.registry}
                         loading={props.loading}
@@ -347,7 +367,7 @@ function ElementRendererContent(props: ElementRendererContentProps) {
             </For>
           );
 
-        return (
+        const rendered = (
           <Component
             element={props.resolvedElement}
             emit={props.emit}
@@ -357,6 +377,17 @@ function ElementRendererContent(props: ElementRendererContentProps) {
           >
             {children()}
           </Component>
+        );
+
+        return (
+          <Show when={devtoolsActive() && props.elementKey} fallback={rendered}>
+            <span
+              data-jr-key={props.elementKey}
+              style={{ display: "contents" }}
+            >
+              {rendered}
+            </span>
+          </Show>
         );
       }}
     </Show>
@@ -450,6 +481,7 @@ export function Renderer(props: RendererProps) {
       {(el) => (
         <ElementRenderer
           element={el()}
+          elementKey={props.spec!.root}
           spec={props.spec!}
           registry={props.registry}
           loading={props.loading}

@@ -99,6 +99,26 @@ export type {
   ActionExecutionContext,
 } from "./actions";
 
+// Action observer (devtools hook)
+export type {
+  ActionDispatchInfo,
+  ActionSettleInfo,
+  ActionObserver,
+} from "./action-observer";
+export {
+  registerActionObserver,
+  notifyActionDispatch,
+  notifyActionSettle,
+  nextActionDispatchId,
+} from "./action-observer";
+
+// Devtools active flag
+export {
+  markDevtoolsActive,
+  isDevtoolsActive,
+  subscribeDevtoolsActive,
+} from "./devtools-flag";
+
 export {
   ActionBindingSchema,
   /** @deprecated Use ActionBindingSchema instead */

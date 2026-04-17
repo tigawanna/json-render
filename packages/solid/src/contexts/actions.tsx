@@ -8,6 +8,9 @@ import {
 import {
   resolveAction,
   executeAction,
+  nextActionDispatchId,
+  notifyActionDispatch,
+  notifyActionSettle,
   type ActionBinding,
   type ActionHandler,
   type ActionConfirm,
@@ -104,157 +107,185 @@ export function ActionProvider(props: ParentProps<ActionProviderProps>) {
   const execute = async (binding: ActionBinding) => {
     const resolved = resolveAction(binding, getSnapshot());
 
-    if (resolved.action === "setState" && resolved.params) {
-      const statePath = resolved.params.statePath as string;
-      const value = resolved.params.value;
-      if (statePath) {
-        set(statePath, value);
-      }
-      return;
-    }
+    // --- devtools / observer hooks ---
+    const dispatchId = nextActionDispatchId();
+    const dispatchedAt = Date.now();
+    notifyActionDispatch({
+      id: dispatchId,
+      name: resolved.action,
+      params: resolved.params,
+      at: dispatchedAt,
+    });
+    let __ok = true;
+    let __error: unknown = undefined;
 
-    if (resolved.action === "pushState" && resolved.params) {
-      const statePath = resolved.params.statePath as string;
-      const rawValue = resolved.params.value;
-      if (statePath) {
-        const resolvedValue = deepResolveValue(rawValue, get);
-        const arr = (get(statePath) as unknown[] | undefined) ?? [];
-        set(statePath, [...arr, resolvedValue]);
-        const clearStatePath = resolved.params.clearStatePath as
-          | string
-          | undefined;
-        if (clearStatePath) {
-          set(clearStatePath, "");
+    try {
+      if (resolved.action === "setState" && resolved.params) {
+        const statePath = resolved.params.statePath as string;
+        const value = resolved.params.value;
+        if (statePath) {
+          set(statePath, value);
         }
-      }
-      return;
-    }
-
-    if (resolved.action === "removeState" && resolved.params) {
-      const statePath = resolved.params.statePath as string;
-      const index = resolved.params.index as number;
-      if (statePath !== undefined && index !== undefined) {
-        const arr = (get(statePath) as unknown[] | undefined) ?? [];
-        set(
-          statePath,
-          arr.filter((_, i) => i !== index),
-        );
-      }
-      return;
-    }
-
-    if (resolved.action === "push" && resolved.params) {
-      const screen = resolved.params.screen as string;
-      if (screen) {
-        const currentScreen = get("/currentScreen") as string | undefined;
-        const navStack = (get("/navStack") as string[] | undefined) ?? [];
-        if (currentScreen) {
-          set("/navStack", [...navStack, currentScreen]);
-        } else {
-          set("/navStack", [...navStack, ""]);
-        }
-        set("/currentScreen", screen);
-      }
-      return;
-    }
-
-    if (resolved.action === "pop") {
-      const navStack = (get("/navStack") as string[] | undefined) ?? [];
-      if (navStack.length > 0) {
-        const previousScreen = navStack[navStack.length - 1];
-        set("/navStack", navStack.slice(0, -1));
-        if (previousScreen) {
-          set("/currentScreen", previousScreen);
-        } else {
-          set("/currentScreen", undefined);
-        }
-      }
-      return;
-    }
-
-    if (resolved.action === "validateForm") {
-      const validateAll = validation?.validateAll;
-      if (!validateAll) {
-        console.warn(
-          "validateForm action was dispatched but no ValidationProvider is connected. " +
-            "Ensure ValidationProvider is rendered inside the provider tree.",
-        );
         return;
       }
-      const valid = validateAll();
-      const errors: Record<string, string[]> = {};
-      for (const [path, fs] of Object.entries(validation.fieldStates)) {
-        if (fs.result && !fs.result.valid) {
-          errors[path] = fs.result.errors;
+
+      if (resolved.action === "pushState" && resolved.params) {
+        const statePath = resolved.params.statePath as string;
+        const rawValue = resolved.params.value;
+        if (statePath) {
+          const resolvedValue = deepResolveValue(rawValue, get);
+          const arr = (get(statePath) as unknown[] | undefined) ?? [];
+          set(statePath, [...arr, resolvedValue]);
+          const clearStatePath = resolved.params.clearStatePath as
+            | string
+            | undefined;
+          if (clearStatePath) {
+            set(clearStatePath, "");
+          }
         }
+        return;
       }
-      const statePath =
-        (resolved.params?.statePath as string) || "/formValidation";
-      set(statePath, { valid, errors });
-      return;
-    }
 
-    const handler = handlers()[resolved.action];
+      if (resolved.action === "removeState" && resolved.params) {
+        const statePath = resolved.params.statePath as string;
+        const index = resolved.params.index as number;
+        if (statePath !== undefined && index !== undefined) {
+          const arr = (get(statePath) as unknown[] | undefined) ?? [];
+          set(
+            statePath,
+            arr.filter((_, i) => i !== index),
+          );
+        }
+        return;
+      }
 
-    if (!handler) {
-      console.warn(`No handler registered for action: ${resolved.action}`);
-      return;
-    }
+      if (resolved.action === "push" && resolved.params) {
+        const screen = resolved.params.screen as string;
+        if (screen) {
+          const currentScreen = get("/currentScreen") as string | undefined;
+          const navStack = (get("/navStack") as string[] | undefined) ?? [];
+          if (currentScreen) {
+            set("/navStack", [...navStack, currentScreen]);
+          } else {
+            set("/navStack", [...navStack, ""]);
+          }
+          set("/currentScreen", screen);
+        }
+        return;
+      }
 
-    if (resolved.confirm) {
-      return new Promise<void>((resolve, reject) => {
-        setPendingConfirmation({
-          action: resolved,
-          handler,
-          resolve: () => {
-            setPendingConfirmation(null);
-            resolve();
-          },
-          reject: () => {
-            setPendingConfirmation(null);
-            reject(new Error("Action cancelled"));
-          },
-        });
-      }).then(async () => {
-        setLoadingActions((prev) => new Set(prev).add(resolved.action));
-        try {
-          await executeAction({
+      if (resolved.action === "pop") {
+        const navStack = (get("/navStack") as string[] | undefined) ?? [];
+        if (navStack.length > 0) {
+          const previousScreen = navStack[navStack.length - 1];
+          set("/navStack", navStack.slice(0, -1));
+          if (previousScreen) {
+            set("/currentScreen", previousScreen);
+          } else {
+            set("/currentScreen", undefined);
+          }
+        }
+        return;
+      }
+
+      if (resolved.action === "validateForm") {
+        const validateAll = validation?.validateAll;
+        if (!validateAll) {
+          console.warn(
+            "validateForm action was dispatched but no ValidationProvider is connected. " +
+              "Ensure ValidationProvider is rendered inside the provider tree.",
+          );
+          return;
+        }
+        const valid = validateAll();
+        const errors: Record<string, string[]> = {};
+        for (const [path, fs] of Object.entries(validation.fieldStates)) {
+          if (fs.result && !fs.result.valid) {
+            errors[path] = fs.result.errors;
+          }
+        }
+        const statePath =
+          (resolved.params?.statePath as string) || "/formValidation";
+        set(statePath, { valid, errors });
+        return;
+      }
+
+      const handler = handlers()[resolved.action];
+
+      if (!handler) {
+        console.warn(`No handler registered for action: ${resolved.action}`);
+        return;
+      }
+
+      if (resolved.confirm) {
+        return new Promise<void>((resolve, reject) => {
+          setPendingConfirmation({
             action: resolved,
             handler,
-            setState: set,
-            navigate: props.navigate,
-            executeAction: async (name: string) => {
-              const subBinding: ActionBinding = { action: name };
-              await execute(subBinding);
+            resolve: () => {
+              setPendingConfirmation(null);
+              resolve();
+            },
+            reject: () => {
+              setPendingConfirmation(null);
+              reject(new Error("Action cancelled"));
             },
           });
-        } finally {
-          setLoadingActions((prev) => {
-            const next = new Set(prev);
-            next.delete(resolved.action);
-            return next;
-          });
-        }
-      });
-    }
+        }).then(async () => {
+          setLoadingActions((prev) => new Set(prev).add(resolved.action));
+          try {
+            await executeAction({
+              action: resolved,
+              handler,
+              setState: set,
+              navigate: props.navigate,
+              executeAction: async (name: string) => {
+                const subBinding: ActionBinding = { action: name };
+                await execute(subBinding);
+              },
+            });
+          } finally {
+            setLoadingActions((prev) => {
+              const next = new Set(prev);
+              next.delete(resolved.action);
+              return next;
+            });
+          }
+        });
+      }
 
-    setLoadingActions((prev) => new Set(prev).add(resolved.action));
-    try {
-      await executeAction({
-        action: resolved,
-        handler,
-        setState: set,
-        navigate: props.navigate,
-        executeAction: async (name: string) => {
-          const subBinding: ActionBinding = { action: name };
-          await execute(subBinding);
-        },
-      });
+      setLoadingActions((prev) => new Set(prev).add(resolved.action));
+      try {
+        await executeAction({
+          action: resolved,
+          handler,
+          setState: set,
+          navigate: props.navigate,
+          executeAction: async (name: string) => {
+            const subBinding: ActionBinding = { action: name };
+            await execute(subBinding);
+          },
+        });
+      } finally {
+        setLoadingActions((prev) => {
+          const next = new Set(prev);
+          next.delete(resolved.action);
+          return next;
+        });
+      }
+    } catch (err) {
+      __ok = false;
+      __error = err;
+      throw err;
     } finally {
-      setLoadingActions((prev) => {
-        const next = new Set(prev);
-        next.delete(resolved.action);
-        return next;
+      const now = Date.now();
+      notifyActionSettle({
+        id: dispatchId,
+        name: resolved.action,
+        ok: __ok,
+        at: now,
+        durationMs: now - dispatchedAt,
+        error: __error,
       });
     }
   };

@@ -27,6 +27,7 @@
 {#if spec && rootElement}
   <ElementRenderer
     element={rootElement}
+    elementKey={spec.root}
     {spec}
     {registry}
     {loading}

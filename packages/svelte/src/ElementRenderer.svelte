@@ -5,8 +5,11 @@
     resolveBindings,
     resolveActionParam,
     evaluateVisibility,
+    isDevtoolsActive,
+    subscribeDevtoolsActive,
     type PropResolutionContext,
   } from "@json-render/core";
+  import { onDestroy } from "svelte";
   import type { ComponentRegistry, ComponentRenderer } from "./renderer.js";
   import type { EventHandle } from "./catalog-types.js";
   import { getStateContext } from "./contexts/StateProvider.svelte";
@@ -18,13 +21,29 @@
 
   interface Props {
     element: UIElement;
+    /** Spec key for this element. Used by the devtools picker. */
+    elementKey?: string;
     spec: Spec;
     registry: ComponentRegistry;
     loading?: boolean;
     fallback?: ComponentRenderer;
   }
 
-  let { element, spec, registry, loading = false, fallback }: Props = $props();
+  let {
+    element,
+    elementKey,
+    spec,
+    registry,
+    loading = false,
+    fallback,
+  }: Props = $props();
+
+  // Reactive mirror of the devtools-active flag (for picker support).
+  let devtoolsActive = $state(isDevtoolsActive());
+  const unsubDevtools = subscribeDevtoolsActive(() => {
+    devtoolsActive = isDevtoolsActive();
+  });
+  onDestroy(unsubDevtools);
 
   const stateCtx = getStateContext();
   const actionCtx = getActionContext();
@@ -110,36 +129,73 @@
         error,
       );
     }}>
-    <Component
-      element={resolvedElement}
-      bindings={elementBindings}
-      {loading}
-      {on}
-      {emit}>
-      {#if resolvedElement.repeat}
-        <RepeatChildren
+    {#if devtoolsActive && elementKey}
+      <span data-jr-key={elementKey} style="display:contents">
+        <Component
           element={resolvedElement}
-          {spec}
-          {registry}
+          bindings={elementBindings}
           {loading}
-          {fallback} />
-      {:else if resolvedElement.children}
-        {#each resolvedElement.children as childKey (childKey)}
-          {#if spec.elements[childKey]}
-            <Self
-              element={spec.elements[childKey]}
+          {on}
+          {emit}>
+          {#if resolvedElement.repeat}
+            <RepeatChildren
+              element={resolvedElement}
               {spec}
               {registry}
               {loading}
               {fallback} />
-          {:else if !loading}
-            {console.warn(
-              `[json-render] Missing element "${childKey}" referenced as child of "${resolvedElement.type}". This element will not render.`,
-            )}
+          {:else if resolvedElement.children}
+            {#each resolvedElement.children as childKey (childKey)}
+              {#if spec.elements[childKey]}
+                <Self
+                  element={spec.elements[childKey]}
+                  elementKey={childKey}
+                  {spec}
+                  {registry}
+                  {loading}
+                  {fallback} />
+              {:else if !loading}
+                {console.warn(
+                  `[json-render] Missing element "${childKey}" referenced as child of "${resolvedElement.type}". This element will not render.`,
+                )}
+              {/if}
+            {/each}
           {/if}
-        {/each}
-      {/if}
-    </Component>
+        </Component>
+      </span>
+    {:else}
+      <Component
+        element={resolvedElement}
+        bindings={elementBindings}
+        {loading}
+        {on}
+        {emit}>
+        {#if resolvedElement.repeat}
+          <RepeatChildren
+            element={resolvedElement}
+            {spec}
+            {registry}
+            {loading}
+            {fallback} />
+        {:else if resolvedElement.children}
+          {#each resolvedElement.children as childKey (childKey)}
+            {#if spec.elements[childKey]}
+              <Self
+                element={spec.elements[childKey]}
+                elementKey={childKey}
+                {spec}
+                {registry}
+                {loading}
+                {fallback} />
+            {:else if !loading}
+              {console.warn(
+                `[json-render] Missing element "${childKey}" referenced as child of "${resolvedElement.type}". This element will not render.`,
+              )}
+            {/if}
+          {/each}
+        {/if}
+      </Component>
+    {/if}
     {#snippet failed()}
       <!-- render nothing -->
     {/snippet}

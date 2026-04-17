@@ -11,8 +11,11 @@ import {
   ValidationProvider,
   useValidation,
 } from "@json-render/react";
+import { JsonRenderDevtools } from "@json-render/devtools-react";
+import type { Catalog } from "@json-render/core";
 
 import { registry, Fallback } from "./registry";
+import { playgroundCatalog } from "./catalog";
 
 // =============================================================================
 // PlaygroundRenderer
@@ -22,6 +25,8 @@ interface PlaygroundRendererProps {
   spec: Spec | null;
   data?: Record<string, unknown>;
   loading?: boolean;
+  /** Show the json-render devtools panel. Default: false. */
+  devtools?: boolean;
 }
 
 const fallbackRenderer = (renderProps: { element: { type: string } }) => (
@@ -72,6 +77,7 @@ export function PlaygroundRenderer({
   spec,
   data,
   loading,
+  devtools,
 }: PlaygroundRendererProps): ReactNode {
   if (!spec) return null;
 
@@ -86,6 +92,12 @@ export function PlaygroundRenderer({
               fallback={fallbackRenderer}
               loading={loading}
             />
+            {devtools ? (
+              <JsonRenderDevtools
+                spec={spec}
+                catalog={playgroundCatalog as unknown as Catalog}
+              />
+            ) : null}
           </ValidatedActions>
         </ValidationProvider>
       </VisibilityProvider>

@@ -3,6 +3,7 @@ import {
   defineComponent,
   h,
   inject,
+  onBeforeUnmount,
   onErrorCaptured,
   provide,
   ref,
@@ -27,6 +28,8 @@ import {
   resolveActionParam,
   evaluateVisibility,
   getByPath,
+  isDevtoolsActive,
+  subscribeDevtoolsActive,
   type PropResolutionContext,
 } from "@json-render/core";
 import type {
@@ -188,12 +191,29 @@ interface ElementRendererInternalProps {
   fallback?: Component;
 }
 
+/**
+ * Reactive mirror of the devtools-active flag.
+ * Used by ElementRenderer to decide whether to add a `data-jr-key` wrapper.
+ */
+function useDevtoolsActive() {
+  const active = ref(isDevtoolsActive());
+  const unsub = subscribeDevtoolsActive(() => {
+    active.value = isDevtoolsActive();
+  });
+  onBeforeUnmount(unsub);
+  return active;
+}
+
 const ElementRenderer = defineComponent({
   name: "JsonRenderElement",
   props: {
     element: {
       type: Object as PropType<UIElement>,
       required: true,
+    },
+    elementKey: {
+      type: String,
+      default: undefined,
     },
     spec: {
       type: Object as PropType<Spec>,
@@ -212,7 +232,8 @@ const ElementRenderer = defineComponent({
       default: undefined,
     },
   },
-  setup(props: ElementRendererInternalProps) {
+  setup(props: ElementRendererInternalProps & { elementKey?: string }) {
+    const devtoolsActive = useDevtoolsActive();
     const repeatScope = useRepeatScope();
     const { ctx: visibilityCtx } = useVisibility();
     const { execute } = useActions();
@@ -360,6 +381,7 @@ const ElementRenderer = defineComponent({
               return h(ElementRenderer, {
                 key: childKey,
                 element: childElement,
+                elementKey: childKey,
                 spec: props.spec,
                 registry: props.registry,
                 loading: props.loading,
@@ -368,23 +390,33 @@ const ElementRenderer = defineComponent({
             })
             .filter((n): n is VNode => n !== null) ?? undefined);
 
+      const componentVNode = h(
+        Component,
+        {
+          element: resolvedElement,
+          emit: emitEvent,
+          on: onEvent,
+          bindings: elementBindings,
+          loading: props.loading,
+        },
+        { default: () => childrenVNodes },
+      );
+
+      // When devtools is mounted, wrap each element in a transparent span so
+      // the picker can map DOM nodes back to spec keys.
+      const tagged =
+        devtoolsActive.value && props.elementKey
+          ? h(
+              "span",
+              { "data-jr-key": props.elementKey, style: "display:contents" },
+              [componentVNode],
+            )
+          : componentVNode;
+
       return h(
         ElementErrorBoundary,
         { elementType: resolvedElement.type },
-        {
-          default: () =>
-            h(
-              Component,
-              {
-                element: resolvedElement,
-                emit: emitEvent,
-                on: onEvent,
-                bindings: elementBindings,
-                loading: props.loading,
-              },
-              { default: () => childrenVNodes },
-            ),
-        },
+        { default: () => tagged },
       );
     };
   },
@@ -455,6 +487,7 @@ const RepeatChildren = defineComponent({
                   return h(ElementRenderer, {
                     key: childKey,
                     element: childElement,
+                    elementKey: childKey,
                     spec: props.spec,
                     registry: props.registry,
                     loading: props.loading,
@@ -505,6 +538,7 @@ export const Renderer = defineComponent({
 
       return h(ElementRenderer, {
         element: rootElement,
+        elementKey: props.spec.root,
         spec: props.spec,
         registry: props.registry,
         loading: props.loading,
